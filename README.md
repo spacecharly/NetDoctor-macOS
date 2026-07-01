@@ -1,4 +1,4 @@
-![NetDoctor macOS social preview](https://opengraph.githubassets.com/1/spacecharly/NetDoctor-macOS)
+![NetDoctor macOS social preview](https://repository-images.githubusercontent.com/1286263391/c7df0cce-37fd-4cfa-94ec-c47811658fba)
 
 # NetDoctor macOS — v4.1 "anti-freeze"
 
