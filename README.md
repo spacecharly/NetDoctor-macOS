@@ -1,4 +1,8 @@
-![NetDoctor macOS social preview](https://repository-images.githubusercontent.com/1286263391/c7df0cce-37fd-4cfa-94ec-c47811658fba)
+<p align="center">
+  <a href="https://github.com/spacecharly/NetDoctor-macOS" target="_blank" rel="noopener noreferrer">
+    <img src="https://repository-images.githubusercontent.com/1286263391/c7df0cce-37fd-4cfa-94ec-c47811658fba" alt="NetDoctor macOS social preview" />
+  </a>
+</p>
 
 # NetDoctor macOS — v4.1 "anti-freeze"
 
