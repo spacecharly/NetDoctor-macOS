@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://github.com/spacecharly/NetDoctor-macOS" target="_blank" rel="noopener noreferrer">
-    <img src="https://repository-images.githubusercontent.com/1286263391/c7df0cce-37fd-4cfa-94ec-c47811658fba" alt="NetDoctor macOS social preview" />
+    <img src="assets/social-preview.jpg" alt="NetDoctor macOS social preview" />
   </a>
 </p>
 
@@ -32,6 +32,7 @@ Designed for cases where a simple interface reset is not enough and you would ot
 |---|---|
 | `netdoctor-repair-macos-v4.1.zsh` | Main script |
 | `test-netdoctor-v4.1.zsh` | Quick sanity-check harness (no sudo, no network required) |
+| `assets/social-preview.jpg` | Versioned local social preview image used at the top of the README |
 | `README.md` | This file |
 
 ---
