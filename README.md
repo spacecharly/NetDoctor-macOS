@@ -4,10 +4,12 @@
   </a>
 </p>
 
-# NetDoctor macOS — v4.1 "anti-freeze"
+# NetDoctor macOS — anti-freeze
 
 A `zsh` script for diagnosing and repairing intermittent network failures on macOS (Ethernet or Wi-Fi).  
 Designed for cases where a simple interface reset is not enough and you would otherwise have to reboot.
+
+Current script version: `4.1` (embedded in `netdoctor-repair-macos.zsh` via `SCRIPT_VERSION`).
 
 ---
 
@@ -30,8 +32,9 @@ Designed for cases where a simple interface reset is not enough and you would ot
 
 | File | Description |
 |---|---|
-| `netdoctor-repair-macos-v4.1.zsh` | Main script |
-| `test-netdoctor-v4.1.zsh` | Quick sanity-check harness (no sudo, no network required) |
+| `netdoctor-repair-macos.zsh` | Main script |
+| `test-netdoctor.zsh` | Quick sanity-check harness (no sudo, no network required) |
+| `install.sh` | Simple installer for `/usr/local/bin` or a custom directory |
 | `assets/social-preview.jpg` | Versioned local social preview image used at the top of the README |
 | `README.md` | This file |
 
@@ -47,10 +50,34 @@ Designed for cases where a simple interface reset is not enough and you would ot
 
 ## Installation
 
+### Simple install
+
 ```zsh
-cd [INSTALL-DIRECTORY]
-chmod +x netdoctor-repair-macos-v4.1.zsh
-chmod +x test-netdoctor-v4.1.zsh
+sudo ./install.sh
+```
+
+By default, this copies the scripts to `/usr/local/bin` and makes them executable.
+During installation, `install.sh` can optionally add a `netdoctor` alias to your `~/.zshrc`.
+You can force the behavior with `NETDOCTOR_ADD_ALIAS=yes|no`.
+
+### Custom install directory
+
+```zsh
+./install.sh "$HOME/bin"
+```
+
+If you use a custom directory, make sure it is on your `PATH`.
+
+If you skip the prompt, you can still add the alias later:
+
+```zsh
+alias netdoctor="/usr/local/bin/netdoctor-repair-macos.zsh"
+```
+
+To add it automatically without prompting:
+
+```zsh
+NETDOCTOR_ADD_ALIAS=yes sudo ./install.sh
 ```
 
 ---
@@ -58,7 +85,7 @@ chmod +x test-netdoctor-v4.1.zsh
 ## Quick test (no sudo, no network dependency)
 
 ```zsh
-./test-netdoctor-v4.1.zsh
+./test-netdoctor.zsh
 ```
 
 ---
@@ -68,37 +95,37 @@ chmod +x test-netdoctor-v4.1.zsh
 ### Diagnose only (no changes made)
 
 ```zsh
-./netdoctor-repair-macos-v4.1.zsh
+./netdoctor-repair-macos.zsh
 ```
 
 ### Standard repair
 
 ```zsh
-./netdoctor-repair-macos-v4.1.zsh --repair
+./netdoctor-repair-macos.zsh --repair
 ```
 
 ### Deep repair (restarts OS network daemons — `configd`, `mDNSResponder`)
 
 ```zsh
-./netdoctor-repair-macos-v4.1.zsh --deep-repair
+./netdoctor-repair-macos.zsh --deep-repair
 ```
 
 ### Force Ethernet transport
 
 ```zsh
-./netdoctor-repair-macos-v4.1.zsh --repair --transport ethernet
+./netdoctor-repair-macos.zsh --repair --transport ethernet
 ```
 
 ### Force a specific interface and service name
 
 ```zsh
-./netdoctor-repair-macos-v4.1.zsh --repair --interface en0 --service "USB 10/100/1000 LAN"
+./netdoctor-repair-macos.zsh --repair --interface en0 --service "USB 10/100/1000 LAN"
 ```
 
 ### Full example with verbose output
 
 ```zsh
-./netdoctor-repair-macos-v4.1.zsh --deep-repair --transport any --verbose
+./netdoctor-repair-macos.zsh --deep-repair --transport any --verbose
 ```
 
 ---

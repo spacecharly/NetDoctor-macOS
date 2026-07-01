@@ -1,19 +1,22 @@
 #!/usr/bin/env zsh
-# test-netdoctor-v4.1.zsh
-# Quick sanity-check harness for netdoctor-repair-macos-v4.1.zsh
+# test-netdoctor.zsh
+# Quick sanity-check harness for netdoctor-repair-macos.zsh
 # No sudo, no network dependency required.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-TARGET="$SCRIPT_DIR/netdoctor-repair-macos-v4.1.zsh"
+TARGET="$SCRIPT_DIR/netdoctor-repair-macos.zsh"
 PASS=0
 FAIL=0
+
+SCRIPT_VERSION="$(grep -E '^SCRIPT_VERSION=' "$TARGET" 2>/dev/null | head -n1 | sed -E 's/^SCRIPT_VERSION="([^"]+)"$/\1/' || true)"
+[[ -n "$SCRIPT_VERSION" ]] || SCRIPT_VERSION="unknown"
 
 pass() { print -r -- "  PASS  $*"; (( PASS++ )) || true; }
 fail() { print -r -- "  FAIL  $*"; (( FAIL++ )) || true; }
 
 print -r -- ""
-print -r -- "NetDoctor v4.1 — test harness"
+print -r -- "NetDoctor v${SCRIPT_VERSION} — test harness"
 print -r -- "Target: $TARGET"
 print -r -- ""
 
@@ -69,5 +72,7 @@ else
   print -r -- "FAILED: ${FAIL} check(s) failed, ${PASS} passed."
   exit 1
 fi
+
+
 
 
