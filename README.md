@@ -1,3 +1,5 @@
+![NetDoctor macOS social preview](https://opengraph.githubassets.com/1/spacecharly/NetDoctor-macOS)
+
 # NetDoctor macOS — v4.1 "anti-freeze"
 
 A `zsh` script for diagnosing and repairing intermittent network failures on macOS (Ethernet or Wi-Fi).  
@@ -177,4 +179,3 @@ ls -t ~/Library/Logs/NetDoctor/*.tar.gz | head -n 1
 ## License
 
 MIT
-
