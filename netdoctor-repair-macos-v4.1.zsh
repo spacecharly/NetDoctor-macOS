@@ -49,6 +49,7 @@ CHECK_LINK=0
 CHECK_IP=0
 CHECK_GW=0
 CHECK_DNS=0
+CHECK_DNS_LIVE=0   # 1 = DNS répond en live ; 0 = cache uniquement
 CHECK_INTERNET=0
 CHECK_HTTPS=0
 
@@ -279,8 +280,20 @@ export_bundle() {
       networksetup -getinfo "$SERVICE" 2>/dev/null || true
 
       echo ""
-      echo "=== IPv4 config ==="
-      networksetup -getmanualproxyport "$SERVICE" 2>/dev/null || true
+      echo "=== DNS servers ==="
+      networksetup -getdnsservers "$SERVICE" 2>/dev/null || true
+
+      echo ""
+      echo "=== MTU ==="
+      networksetup -getMTU "$INTERFACE" 2>/dev/null || true
+
+      echo ""
+      echo "=== DNS per-server live test ==="
+      scutil --dns 2>/dev/null | awk '/nameserver/{print $3}' | head -5 | while read -r ns; do
+        [[ -z "$ns" ]] && continue
+        result="$(nslookup example.com "$ns" 2>&1 | grep -E 'Address:|NXDOMAIN|timed out|No response' | head -2 || true)"
+        printf "  %-45s → %s\n" "$ns" "${result:-timeout/error}"
+      done
     fi
 
     echo ""
@@ -377,16 +390,36 @@ check_gateway() {
 }
 
 check_dns() {
+  # Test live query first (timeout court pour ne pas bloquer 3× T_NSLOOKUP)
   if _timeout "$T_NSLOOKUP" nslookup example.com >/dev/null 2>&1; then
-    ok "DNS OK"
-    CHECK_DNS=1; return 0
+    ok "DNS OK (live)"
+    CHECK_DNS=1; CHECK_DNS_LIVE=1; return 0
   fi
-  if _timeout "$T_NSLOOKUP" dscacheutil -q host -a name example.com 2>/dev/null | grep -q 'ip_address'; then
-    warn "DNS via cache only"
-    CHECK_DNS=1; return 0
+  # Repli sur le cache local
+  if _timeout 3 dscacheutil -q host -a name example.com 2>/dev/null | grep -q 'ip_address'; then
+    warn "DNS via cache uniquement — résolution live défaillante"
+    warn "  Serveur DNS primaire possiblement injoignable (ex. adresse IPv6 link-local)"
+    CHECK_DNS=1; CHECK_DNS_LIVE=0; return 0
   fi
-  err "DNS failed"
-  CHECK_DNS=0; return 1
+  err "DNS échoué (ni live, ni cache)"
+  CHECK_DNS=0; CHECK_DNS_LIVE=0; return 1
+}
+
+# Teste chaque serveur DNS individuellement et affiche le diagnostic
+check_dns_servers() {
+  info "Test de chaque serveur DNS configuré :"
+  local ns_list any_ok=0
+  ns_list="$(scutil --dns 2>/dev/null | awk '/nameserver/{print $3}' | head -5 || true)"
+  for ns in ${(f)ns_list}; do
+    [[ -z "$ns" ]] && continue
+    if _timeout 3 nslookup example.com "$ns" >/dev/null 2>&1; then
+      ok "  Serveur DNS joignable : $ns"
+      any_ok=1
+    else
+      warn "  Serveur DNS injoignable : $ns"
+    fi
+  done
+  return $(( any_ok == 0 ))
 }
 
 check_internet() {
@@ -403,12 +436,29 @@ check_https() {
     ok "HTTPS OK"
     CHECK_HTTPS=1; return 0
   fi
+  # Si le DNS live est mort, tenter avec IP résolue par le cache pour
+  # distinguer "DNS cassé" de "TLS/firewall cassé"
+  local cached_ip
+  cached_ip="$(dscacheutil -q host -a name example.com 2>/dev/null | awk '/ip_address/{print $2; exit}' || true)"
+  if [[ -n "$cached_ip" ]]; then
+    if _timeout "$T_CURL" curl -4 -fsS --connect-timeout 4 --max-time "$T_CURL" \
+        --resolve "example.com:443:$cached_ip" https://example.com >/dev/null 2>&1; then
+      warn "HTTPS fonctionne avec IP en cache ($cached_ip) — cause probable : DNS live cassé"
+      CHECK_HTTPS=0; return 1
+    fi
+  fi
   err "HTTPS failed"
   CHECK_HTTPS=0; return 1
 }
 
 classify_failure() {
-  if (( CHECK_INTERNET == 1 && CHECK_HTTPS == 0 )); then
+  if (( CHECK_DNS_LIVE == 0 && CHECK_DNS == 1 && CHECK_HTTPS == 0 )); then
+    warn "Pattern: DNS live défaillant (cache uniquement) → HTTPS bloqué"
+    warn "  Causes probables : serveur DNS IPv6 link-local injoignable, DNS du routeur en panne,"
+    warn "  résolution IPv6 défectueuse sur le réseau local"
+    warn "  Solution : --repair force le DNS sur 1.1.1.1 / 8.8.8.8"
+    check_dns_servers
+  elif (( CHECK_INTERNET == 1 && CHECK_HTTPS == 0 )); then
     warn "Pattern: IP works, HTTPS fails"
     warn "  Likely causes: bad system date/time, IPv6 stack issue, proxy, TLS trust"
   elif (( CHECK_LINK == 1 && CHECK_IP == 0 )); then
@@ -527,6 +577,32 @@ repair_standard() {
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Repair: DNS — force des serveurs publics puis vérifie la résolution live
+# ──────────────────────────────────────────────────────────────────────────────
+repair_dns() {
+  step "Réparation DNS : bascule vers serveurs publics (1.1.1.1 + 8.8.8.8)"
+  if [[ -z "$SERVICE" ]]; then
+    warn "Nom de service inconnu — impossible de modifier les DNS"
+    return 1
+  fi
+
+  info "Définition des DNS publics sur '$SERVICE'"
+  _timeout "$T_REPAIR_STEP" sudo networksetup -setdnsservers "$SERVICE" 1.1.1.1 8.8.8.8 2>/dev/null || true
+  sleep 2
+  _timeout "$T_REPAIR_STEP" sudo killall -HUP mDNSResponder 2>/dev/null || true
+  _timeout "$T_REPAIR_STEP" sudo dscacheutil -flushcache 2>/dev/null || true
+  sleep 1
+
+  if _timeout "$T_NSLOOKUP" nslookup example.com >/dev/null 2>&1; then
+    ok "Résolution DNS live restaurée via 1.1.1.1/8.8.8.8"
+    CHECK_DNS_LIVE=1
+    return 0
+  fi
+  warn "DNS encore défaillant malgré les serveurs publics"
+  return 1
+}
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Repair: HTTPS-only (when IP/GW/DNS/Internet OK but HTTPS fails)
 # ──────────────────────────────────────────────────────────────────────────────
 repair_https_only() {
@@ -536,8 +612,18 @@ repair_https_only() {
   _timeout "$T_REPAIR_STEP" sudo dscacheutil -flushcache 2>/dev/null || true
   _timeout "$T_REPAIR_STEP" sudo killall -HUP mDNSResponder 2>/dev/null || true
 
+  # Si le DNS live est cassé, tenter de basculer sur des DNS publics AVANT
+  # de faire quoi que ce soit d'autre (c'est souvent la vraie cause)
+  if (( CHECK_DNS_LIVE == 0 )); then
+    warn "DNS live défaillant détecté — tentative de réparation DNS en priorité"
+    repair_dns
+  fi
+
   info "Sync system clock via NTP (TLS cert validation needs correct time)"
-  _timeout 15 sudo sntp -sS time.apple.com 2>/dev/null || true
+  # Essayer plusieurs méthodes selon la version macOS
+  _timeout 15 sudo sntp -sS time.apple.com 2>/dev/null || \
+  _timeout 15 sudo sntp -sS 17.253.14.125 2>/dev/null || \
+  _timeout 15 sudo systemsetup -setusingnetworktime on 2>/dev/null || true
 
   if [[ -n "$SERVICE" ]]; then
     info "Reset IPv6 on '$SERVICE' (common cause of HTTPS-only failure)"
