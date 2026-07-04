@@ -187,7 +187,9 @@ Every run writes a log to:
 ~/Library/Logs/NetDoctor/netdoctor-YYYYMMDD-HHMMSS.log
 ```
 
-When checks fail, a full diagnostic bundle is exported:
+When checks fail, a full diagnostic bundle is exported.
+If the script is interrupted (`Ctrl+C`) or exits unexpectedly with a non-zero code,
+NetDoctor now also performs a fail-safe bundle export before exiting:
 
 ```
 ~/Library/Logs/NetDoctor/bundle-YYYYMMDD-HHMMSS/

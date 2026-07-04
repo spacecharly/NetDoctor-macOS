@@ -21,7 +21,7 @@ print -r -- "Target: $TARGET"
 print -r -- ""
 
 # ── 1. File exists ──────────────────────────────────────────────────────
-print -r -- "[1/5] File exists"
+print -r -- "[1/7] File exists"
 if [[ -f "$TARGET" ]]; then
   pass "Script file found"
 else
@@ -32,7 +32,7 @@ else
 fi
 
 # ── 2. Syntax check ─────────────────────────────────────────────────────
-print -r -- "[2/5] Syntax check (zsh -n)"
+print -r -- "[2/7] Syntax check (zsh -n)"
 if zsh -n "$TARGET" 2>/dev/null; then
   pass "Syntax OK"
 else
@@ -40,7 +40,7 @@ else
 fi
 
 # ── 3. Executable ───────────────────────────────────────────────────────
-print -r -- "[3/5] Executable bit"
+print -r -- "[3/7] Executable bit"
 if [[ -x "$TARGET" ]]; then
   pass "Script is executable"
 else
@@ -48,7 +48,7 @@ else
 fi
 
 # ── 4. --help output ────────────────────────────────────────────────────
-print -r -- "[4/5] --help output"
+print -r -- "[4/7] --help output"
 if "$TARGET" --help 2>&1 | grep -q 'NetDoctor'; then
   pass "--help output contains expected content"
 else
@@ -56,11 +56,27 @@ else
 fi
 
 # ── 5. Invalid option exits non-zero ────────────────────────────────────
-print -r -- "[5/5] Invalid option handling"
+print -r -- "[5/7] Invalid option handling"
 if ! "$TARGET" --invalid-option-xyz 2>/dev/null; then
   pass "Invalid option correctly rejected (non-zero exit)"
 else
   fail "Invalid option did NOT produce a non-zero exit"
+fi
+
+# ── 6. Regression guard: classify_failure must not abort script ───────────────
+print -r -- "[6/7] Regression guard (classify_failure)"
+if grep -q 'check_dns_servers || true' "$TARGET"; then
+  pass "classify_failure protects diagnostic DNS probe from set -e"
+else
+  fail "Missing 'check_dns_servers || true' guard"
+fi
+
+# ── 7. Safety net: exit trap for bundle export ───────────────────────────────
+print -r -- "[7/7] Safety net (exit trap)"
+if grep -q "trap 'on_exit' EXIT" "$TARGET"; then
+  pass "EXIT trap configured for fail-safe bundle export"
+else
+  fail "Missing EXIT trap configuration"
 fi
 
 # ── Summary ─────────────────────────────────────────────────────────────

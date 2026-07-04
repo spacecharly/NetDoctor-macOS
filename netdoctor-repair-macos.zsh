@@ -53,6 +53,10 @@ CHECK_DNS_LIVE=0   # 1 = DNS répond en live ; 0 = cache uniquement
 CHECK_INTERNET=0
 CHECK_HTTPS=0
 
+# Bundle/export guards (évite les doubles exports et assure un fallback en cas de sortie anormale)
+BUNDLE_EXPORTED=0
+DIAG_CONTEXT_READY=0
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Timeout wrapper
 # ──────────────────────────────────────────────────────────────────────────────
@@ -87,6 +91,29 @@ warn()  { _log "WARN   $*"; }
 err()   { _log "ERROR  $*"; }
 step()  { _log "────── $*"; }
 ok()    { _log "OK ✓   $*"; }
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Exit/signal safety net
+# ──────────────────────────────────────────────────────────────────────────────
+on_signal() {
+  local sig="${1:-TERM}"
+  warn "Signal ${sig} reçu — arrêt en cours"
+  exit 130
+}
+
+on_exit() {
+  local rc=$?
+
+  # Évite une récursion du trap si export_bundle échoue partiellement.
+  trap - EXIT INT TERM HUP
+
+  if (( DIAG_CONTEXT_READY == 1 && rc != 0 && BUNDLE_EXPORTED == 0 )); then
+    warn "Sortie inattendue (code ${rc}) — export du bundle de diagnostic"
+    export_bundle || true
+  fi
+
+  exit "$rc"
+}
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Usage
@@ -243,6 +270,11 @@ take_snapshot() {
 # Diagnostic bundle export
 # ──────────────────────────────────────────────────────────────────────────────
 export_bundle() {
+  if (( BUNDLE_EXPORTED == 1 )); then
+    return 0
+  fi
+  BUNDLE_EXPORTED=1
+
   step "Exporting diagnostic bundle → $BUNDLE_DIR"
   mkdir -p "$BUNDLE_DIR"
 
@@ -457,7 +489,7 @@ classify_failure() {
     warn "  Causes probables : serveur DNS IPv6 link-local injoignable, DNS du routeur en panne,"
     warn "  résolution IPv6 défectueuse sur le réseau local"
     warn "  Solution : --repair force le DNS sur 1.1.1.1 / 8.8.8.8"
-    check_dns_servers
+    check_dns_servers || true
   elif (( CHECK_INTERNET == 1 && CHECK_HTTPS == 0 )); then
     warn "Pattern: IP works, HTTPS fails"
     warn "  Likely causes: bad system date/time, IPv6 stack issue, proxy, TLS trust"
@@ -471,6 +503,9 @@ classify_failure() {
     warn "Pattern: local IP but no gateway"
     warn "  Likely causes: router issue, bad static config"
   fi
+
+  # Diagnostic uniquement: ne jamais faire échouer le flux principal.
+  return 0
 }
 
 all_ok() {
@@ -676,6 +711,12 @@ main() {
 
   info "NetDoctor v${SCRIPT_VERSION} — $(date '+%Y-%m-%d %H:%M:%S')"
   info "Log: $LOG_FILE"
+
+  DIAG_CONTEXT_READY=1
+  trap 'on_exit' EXIT
+  trap 'on_signal INT' INT
+  trap 'on_signal TERM' TERM
+  trap 'on_signal HUP' HUP
 
   detect_interface
   detect_service
